@@ -4,52 +4,22 @@ namespace LocalizationWithJsonResource.Helpers
 {
     public class MemoryCacheHelper
     {
-        private readonly IMemoryCache _memoryCache;
+        private readonly IMemoryCache _cache;
 
-        public MemoryCacheHelper(IMemoryCache memoryCache)
+        public MemoryCacheHelper(IMemoryCache cache)
         {
-            _memoryCache = memoryCache;
+            _cache = cache;
         }
 
-        /// <summary>
-        /// Cache'de var mı kontrol eder, yoksa veriyi ekleyip geri döner.
-        /// </summary>
-        public T GetOrCreate<T>(string key, Func<T> createItem, TimeSpan expirationTime)
+        public T? GetFromCache<T>(string key)
         {
-            // Eğer cache'de var ise direkt döndür
-            if (_memoryCache.TryGetValue(key, out T cacheItem))
-            {
-                return cacheItem;
-            }
-
-            // Cache'de yok ise, oluştur ve cache'e ekle
-            cacheItem = createItem();
-            _memoryCache.Set(key, cacheItem, expirationTime);
-            return cacheItem;
+            _cache.TryGetValue(key, out T value);
+            return value;
         }
 
-        /// <summary>
-        /// Cache'den veriyi getirir.
-        /// </summary>
-        public T Get<T>(string key)
+        public void SetCache<T>(string key, T value, TimeSpan expirationTime)
         {
-            return _memoryCache.TryGetValue(key, out T cacheItem) ? cacheItem : default;
-        }
-
-        /// <summary>
-        /// Cache'e veri ekler.
-        /// </summary>
-        public void Set<T>(string key, T item, TimeSpan expirationTime)
-        {
-            _memoryCache.Set(key, item, expirationTime);
-        }
-
-        /// <summary>
-        /// Cache'den veriyi siler.
-        /// </summary>
-        public void Remove(string key)
-        {
-            _memoryCache.Remove(key);
+            _cache.Set(key, value, expirationTime);
         }
     }
 }

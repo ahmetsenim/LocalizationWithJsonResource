@@ -9,7 +9,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 var localizationOptions = new LocalizationOptionDTO
 {
-    SupportedCultures = builder.Configuration.GetSection("LocalizationOptions:SupportedCultures").Get<List<string>>(),
     DefaultCulture = builder.Configuration["LocalizationOptions:DefaultCulture"]
 };
 builder.Services.AddSingleton(localizationOptions);

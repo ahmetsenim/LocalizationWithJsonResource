@@ -2,6 +2,7 @@
 using LocalizationWithJsonResource.Models.DTOs;
 using LocalizationWithJsonResource.Services.Interfaces;
 using Newtonsoft.Json.Linq;
+using System.Text.RegularExpressions;
 
 namespace LocalizationWithJsonResource.Services
 {
@@ -22,47 +23,50 @@ namespace LocalizationWithJsonResource.Services
 
         public string GetLocalizedValue(string key)
         {
-            var culture = "";
-            if (!string.IsNullOrEmpty(_httpContextAccessor.HttpContext.Request.Headers["Accept-Language"])) {
-                culture = _httpContextAccessor.HttpContext.Request.Headers["Accept-Language"].ToString();
-            }
-
-            var supportedCulture = _localizationOption.SupportedCultures.Find(k => k.Equals(culture));
-            if (supportedCulture == null) {
-                var cultureShort = culture.Split('-').FirstOrDefault();
-                supportedCulture = _localizationOption.SupportedCultures.Find(k => k.Equals(cultureShort));
-                if (supportedCulture != null)
-                {
-                    culture = cultureShort;
-                }
-                else
-                {
-                    culture = _localizationOption.DefaultCulture;
-                }
-            }
-            var cacheKey = $"Localization_{culture}";
-
-            var localizationData = _memoryCacheHelper.GetOrCreate(cacheKey, () => LoadLocalizationData(culture), TimeSpan.FromHours(1));
+            var acceptLanguage = _httpContextAccessor.HttpContext.Request.Headers["Accept-Language"];
+            var culture = acceptLanguage.Count > 0 ? acceptLanguage.ToString().Split('-').FirstOrDefault() : "";
+            var localizationData = LoadLocalizationData(culture);
             return localizationData[key];
         }
 
+
         private Dictionary<string, string> LoadLocalizationData(string culture)
         {
-            var filePath = Path.Combine(_environment.ContentRootPath, "Resources", $"{culture}.json");
-
-            if (!File.Exists(filePath))
-            {
-                filePath = Path.Combine(_environment.ContentRootPath, "Resources", $"{_localizationOption.DefaultCulture}.json");
-            }
-
-            var jsonData = File.ReadAllText(filePath);
-            var jsonObject = JObject.Parse(jsonData);
-
-            return jsonObject.Descendants()
-                             .OfType<JProperty>()
-                             .ToDictionary(p => p.Name.ToString(), p => p.Value.ToString());
+            var d = TryGetLocalizationFromCache(culture) ?? TryLoadLocalizationFromFile(culture) ?? TryGetFallbackLocalization();
+            return d;
         }
 
+        private Dictionary<string, string> TryGetLocalizationFromCache(string culture)
+        {
+            var cacheKey = $"Localization_{culture}";
+            return _memoryCacheHelper.GetFromCache<Dictionary<string, string>>(cacheKey);
+        }
 
+        private Dictionary<string, string> TryLoadLocalizationFromFile(string culture)
+        {
+            var filePath = GetFilePathForCulture(culture);
+            if (File.Exists(filePath))
+            {
+                var jsonData = File.ReadAllText(filePath);
+                var jsonObject = JObject.Parse(jsonData);
+                var localizationData = jsonObject.Descendants()
+                                                 .OfType<JProperty>()
+                                                 .ToDictionary(p => p.Name, p => p.Value.ToString());
+                _memoryCacheHelper.SetCache($"Localization_{culture}", localizationData, TimeSpan.FromMinutes(1));
+                return localizationData;
+            }
+            return null;
+        }
+
+        private string GetFilePathForCulture(string culture)
+        {
+            return Path.Combine(_environment.ContentRootPath, "Resources", $"{culture}.json");
+        }
+
+        private Dictionary<string, string> TryGetFallbackLocalization()
+        {
+            var defaultCulture = _localizationOption.DefaultCulture;
+            return TryGetLocalizationFromCache(defaultCulture) ?? TryLoadLocalizationFromFile(defaultCulture);
+        }
     }
 }
